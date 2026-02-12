@@ -1,27 +1,99 @@
+"""Publish reusable scorers to Braintrust project."""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
 import braintrust
+from dotenv import load_dotenv
 from pydantic import BaseModel
 
+load_dotenv()
 
-class StepEfficiencyScorer(BaseModel):
-    output: list[dict]
+PROJECT_NAME = os.environ.get("BRAINTRUST_PROJECT", "openai-agent-sdk-supervisor")
+ORG_NAME = os.environ.get("BRAINTRUST_ORG_NAME", "Braintrust Demos")
+JUDGE_MODEL = os.environ.get("EVAL_JUDGE_MODEL", "gpt-4o-mini")
+
+
+class StepEfficiencyParams(BaseModel):
+    output: list[dict[str, Any]]
+    max_steps: int = 8
 
 
 async def step_efficiency_scorer(output):
-    MAX_STEPS = 8
-    messages = output.get("messages", [])
-    num_steps = len(messages)
-    if num_steps <= MAX_STEPS:
+    """Score based on total number of output messages."""
+    max_steps = 8
+    num_steps = len(output.get("messages", [])) if isinstance(output, dict) else 0
+    if num_steps <= max_steps:
         return 1.0
+    return max(0.0, 1.0 - (num_steps - max_steps) / max_steps)
 
-    return max(0.0, 1.0 - (num_steps - MAX_STEPS) / MAX_STEPS)
+
+RESPONSE_QUALITY_PROMPT = """
+You are an expert evaluator of AI assistant responses.
+
+User Question: {{input}}
+AI Response: {{output}}
+
+Evaluate the response based on:
+1. ACCURACY
+2. COMPLETENESS
+3. CLARITY
+4. RELEVANCE
+
+Scoring guidance:
+- For pure arithmetic questions, a concise correct numeric answer is acceptable.
+- For compound questions that ask for both a factual lookup and a calculation,
+  the response must include both the factual answer and the computed result.
+- Do not mark a response incorrect merely for brevity if it fully answers the question.
+
+Respond with:
+EXCELLENT
+GOOD
+FAIR
+POOR
+""".strip()
 
 
-project = braintrust.projects.create(name="openai-agent-sdk-supervisor")
+def main() -> None:
+    project = braintrust.projects.create(name=PROJECT_NAME)
 
-project.scorers.create(
-    name="Step Efficiency (Bundled)",
-    slug="step-efficiency-bundled",
-    description="Evaluates the number of steps taken to answer the question.",
-    parameters=StepEfficiencyScorer,
-    handler=step_efficiency_scorer,
-)
+    project.scorers.create(
+        name="Step Efficiency",
+        slug="step-efficiency",
+        description="Penalizes excessive step counts in the final message trace.",
+        parameters=StepEfficiencyParams,
+        handler=step_efficiency_scorer,
+        if_exists="replace",
+        metadata={"org": ORG_NAME},
+    )
+
+    project.scorers.create(
+        name="Response Quality (LLM Judge)",
+        slug="response-quality-llm-judge",
+        description=(
+            "LLM-as-a-judge scorer for overall response quality, with guidance for "
+            "concise math answers and compound research+math questions."
+        ),
+        prompt=RESPONSE_QUALITY_PROMPT,
+        model=JUDGE_MODEL,
+        use_cot=True,
+        choice_scores={
+            "EXCELLENT": 1.0,
+            "GOOD": 0.75,
+            "FAIR": 0.5,
+            "POOR": 0.0,
+        },
+        if_exists="replace",
+        metadata={"org": ORG_NAME},
+    )
+
+    print(
+        "Published scorers to project "
+        f"{PROJECT_NAME}: step-efficiency, response-quality-llm-judge"
+    )
+
+
+if __name__ == "__main__":
+    main()

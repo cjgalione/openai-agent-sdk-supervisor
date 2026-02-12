@@ -193,6 +193,12 @@ Evaluate the response based on:
 3. CLARITY
 4. RELEVANCE
 
+Scoring guidance:
+- For pure arithmetic questions, a concise correct numeric answer is acceptable.
+- For compound questions that ask for both a factual lookup and a calculation,
+  the response must include both the factual answer and the computed result.
+- Do not mark a response incorrect merely for brevity if it fully answers the question.
+
 Respond with:
 EXCELLENT
 GOOD
@@ -218,7 +224,15 @@ async def response_quality_scorer(input, output, expected, metadata, trace):
             assistant_response = str(msg["content"])
             break
 
-    prompt = response_quality_prompt.replace("{{input}}", str(input)).replace(
+    if isinstance(input, dict):
+        try:
+            normalized_input = extract_query_from_input(input)
+        except Exception:
+            normalized_input = str(input)
+    else:
+        normalized_input = str(input)
+
+    prompt = response_quality_prompt.replace("{{input}}", normalized_input).replace(
         "{{output}}",
         assistant_response or str(output),
     )

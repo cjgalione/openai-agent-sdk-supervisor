@@ -25,6 +25,11 @@ IMPORTANT INSTRUCTIONS:
 - Use at most ONE handoff tool call per turn
 - For compound requests that need both research and math, delegate to one specialist first; that specialist can hand off to the other specialist if needed
 - When in doubt about whether to research something, USE THE RESEARCH AGENT - it's better to verify facts than to rely on potentially outdated information
+- For compound questions, your final response MUST include:
+  * The key factual value(s) found
+  * The calculation result
+  * A concise explanation linking them
+- For research-backed answers, include at least one source URL in the final response
 
 IMPORTANT INFORMATION:
 - The current date is {datetime.now().strftime("%Y-%m-%d")}.
@@ -53,8 +58,8 @@ DEFAULT_RESEARCH_AGENT_PROMPT = (
     "- If a task requires a math computation after research, hand off to the Math Agent once with the computed numeric inputs\n"
     "- Use at most ONE handoff tool call per turn\n"
     "- Provide links to sources of your information in the response\n"
-    "- If no additional handoff is needed, respond with the final result\n"
-    "- Respond ONLY with the results of your work, do NOT include ANY other text."
+    "- If no additional handoff is needed, provide a concise factual answer with source URLs\n"
+    "- When returning values needed for downstream math, include both the factual context and the raw numeric values."
 )
 
 DEFAULT_MATH_AGENT_PROMPT = (
@@ -63,8 +68,8 @@ DEFAULT_MATH_AGENT_PROMPT = (
     "- Assist ONLY with math-related tasks\n"
     "- If a task is missing a factual value, hand off to the Research Agent once to fetch it\n"
     "- Use at most ONE handoff tool call per turn\n"
-    "- If no additional handoff is needed, respond with the final result\n"
-    "- Respond ONLY with the results of your work, do NOT include ANY other text."
+    "- If no additional handoff is needed, provide a concise answer that includes both the calculation and the final numeric result\n"
+    "- For compound tasks, preserve factual context in the final answer (do not return only a bare number)."
 )
 
 # Default model names
