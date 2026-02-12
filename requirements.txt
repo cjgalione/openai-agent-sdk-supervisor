@@ -1,0 +1,9 @@
+openai-agents
+openai
+tavily-python
+python-dotenv
+braintrust
+rich
+autoevals
+modal
+fastapi[standard]
