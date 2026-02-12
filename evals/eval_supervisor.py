@@ -12,7 +12,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from agents import RunConfig, Runner, set_trace_processors  # noqa: E402
-from braintrust import Eval, init_dataset, init_logger  # noqa: E402
+from braintrust import Eval, init_dataset, init_function, init_logger  # noqa: E402
 from braintrust.oai import wrap_openai  # noqa: E402
 from braintrust.wrappers.openai import BraintrustTracingProcessor  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
@@ -259,9 +259,20 @@ async def response_quality_scorer(input, output, expected, metadata, trace):
 
 
 async def step_efficiency_scorer(output):
-    """Score based on number of serialized messages."""
+    """Score based on number of serialized messages.
+
+    In some remote-eval contexts Braintrust may pass a plain string output,
+    so we defensively normalize non-dict outputs.
+    """
     max_steps = 8
-    num_steps = len(output.get("messages", []))
+    if isinstance(output, dict):
+        num_steps = len(output.get("messages", []))
+    elif isinstance(output, str):
+        # Treat a plain final response as a single-step completion.
+        num_steps = 1 if output.strip() else 0
+    else:
+        num_steps = 0
+
     if num_steps <= max_steps:
         return 1.0
     return max(0.0, 1.0 - (num_steps - max_steps) / max_steps)
@@ -305,6 +316,15 @@ logger = init_logger(
 )
 set_trace_processors([BraintrustTracingProcessor(logger)])
 
+use_published_step_scorer = (
+    os.environ.get("USE_PUBLISHED_STEP_SCORER", "1").lower() in {"1", "true", "yes"}
+)
+step_efficiency_score = (
+    init_function(project_name=project_name, slug="step-efficiency")
+    if use_published_step_scorer
+    else step_efficiency_scorer
+)
+
 Eval(
     project_name,
     data=get_eval_data(project_name),
@@ -312,7 +332,7 @@ Eval(
     scores=[
         response_quality_scorer,
         routing_accuracy_scorer,
-        step_efficiency_scorer,
+        step_efficiency_score,
     ],  # type: ignore
     parameters={
         "system_prompt": SystemPromptParam,

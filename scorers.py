@@ -23,7 +23,13 @@ class StepEfficiencyParams(BaseModel):
 async def step_efficiency_scorer(output):
     """Score based on total number of output messages."""
     max_steps = 8
-    num_steps = len(output.get("messages", [])) if isinstance(output, dict) else 0
+    if isinstance(output, dict):
+        num_steps = len(output.get("messages", []))
+    elif isinstance(output, str):
+        num_steps = 1 if output.strip() else 0
+    else:
+        num_steps = 0
+
     if num_steps <= max_steps:
         return 1.0
     return max(0.0, 1.0 - (num_steps - max_steps) / max_steps)
