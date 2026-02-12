@@ -1,4 +1,4 @@
-"""Publish reusable scorers to Braintrust project."""
+"""Reusable Braintrust scorer definitions for `braintrust push`."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from pydantic import BaseModel
 load_dotenv()
 
 PROJECT_NAME = os.environ.get("BRAINTRUST_PROJECT", "openai-agent-sdk-supervisor")
-ORG_NAME = os.environ.get("BRAINTRUST_ORG_NAME", "Braintrust Demos")
 JUDGE_MODEL = os.environ.get("EVAL_JUDGE_MODEL", "gpt-4o-mini")
 
 
@@ -56,44 +55,30 @@ POOR
 """.strip()
 
 
-def main() -> None:
-    project = braintrust.projects.create(name=PROJECT_NAME)
+project = braintrust.projects.create(name=PROJECT_NAME)
 
-    project.scorers.create(
-        name="Step Efficiency",
-        slug="step-efficiency",
-        description="Penalizes excessive step counts in the final message trace.",
-        parameters=StepEfficiencyParams,
-        handler=step_efficiency_scorer,
-        if_exists="replace",
-        metadata={"org": ORG_NAME},
-    )
+project.scorers.create(
+    name="Step Efficiency",
+    slug="step-efficiency",
+    description="Penalizes excessive step counts in the final message trace.",
+    parameters=StepEfficiencyParams,
+    handler=step_efficiency_scorer,
+)
 
-    project.scorers.create(
-        name="Response Quality (LLM Judge)",
-        slug="response-quality-llm-judge",
-        description=(
-            "LLM-as-a-judge scorer for overall response quality, with guidance for "
-            "concise math answers and compound research+math questions."
-        ),
-        prompt=RESPONSE_QUALITY_PROMPT,
-        model=JUDGE_MODEL,
-        use_cot=True,
-        choice_scores={
-            "EXCELLENT": 1.0,
-            "GOOD": 0.75,
-            "FAIR": 0.5,
-            "POOR": 0.0,
-        },
-        if_exists="replace",
-        metadata={"org": ORG_NAME},
-    )
-
-    print(
-        "Published scorers to project "
-        f"{PROJECT_NAME}: step-efficiency, response-quality-llm-judge"
-    )
-
-
-if __name__ == "__main__":
-    main()
+project.scorers.create(
+    name="Response Quality (LLM Judge)",
+    slug="response-quality-llm-judge",
+    description=(
+        "LLM-as-a-judge scorer for overall response quality, with guidance for "
+        "concise math answers and compound research+math questions."
+    ),
+    prompt=RESPONSE_QUALITY_PROMPT,
+    model=JUDGE_MODEL,
+    use_cot=True,
+    choice_scores={
+        "EXCELLENT": 1.0,
+        "GOOD": 0.75,
+        "FAIR": 0.5,
+        "POOR": 0.0,
+    },
+)
