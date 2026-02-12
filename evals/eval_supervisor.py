@@ -12,7 +12,6 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from agents import RunConfig, Runner, set_trace_processors  # noqa: E402
-from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval, init_dataset, init_logger  # noqa: E402
 from braintrust.oai import wrap_openai  # noqa: E402
 from braintrust.wrappers.openai import BraintrustTracingProcessor  # noqa: E402
@@ -201,13 +200,48 @@ FAIR
 POOR
 """
 
-response_quality_scorer = LLMClassifier(
-    name="Response Quality",
-    prompt_template=response_quality_prompt,
-    choice_scores={"EXCELLENT": 1.0, "GOOD": 0.75, "FAIR": 0.5, "POOR": 0.0},
-    use_cot=True,
-    model=os.environ.get("EVAL_JUDGE_MODEL", "gpt-4o"),
-)
+class ResponseQualityOutput(BaseModel):
+    """Structured output for response quality scoring."""
+
+    choice: Literal["EXCELLENT", "GOOD", "FAIR", "POOR"]
+    reasoning: str
+
+
+async def response_quality_scorer(input, output, expected, metadata, trace):
+    """Score response quality with structured output parsing."""
+    del expected, metadata, trace
+
+    messages = output.get("messages", []) if isinstance(output, dict) else []
+    assistant_response = ""
+    for msg in reversed(messages):
+        if isinstance(msg, dict) and msg.get("role") == "assistant" and msg.get("content"):
+            assistant_response = str(msg["content"])
+            break
+
+    prompt = response_quality_prompt.replace("{{input}}", str(input)).replace(
+        "{{output}}",
+        assistant_response or str(output),
+    )
+
+    response = client.responses.parse(
+        model=os.environ.get("EVAL_JUDGE_MODEL", "gpt-4o"),
+        input=[{"role": "user", "content": prompt}],
+        text_format=ResponseQualityOutput,
+    )
+    parsed = response.output_parsed
+    if parsed is None:
+        return {
+            "name": "Response Quality",
+            "score": 0.0,
+            "metadata": {"choice": "POOR", "reasoning": "No parsed output"},
+        }
+
+    score_map = {"EXCELLENT": 1.0, "GOOD": 0.75, "FAIR": 0.5, "POOR": 0.0}
+    return {
+        "name": "Response Quality",
+        "score": score_map.get(parsed.choice, 0.0),
+        "metadata": {"choice": parsed.choice, "reasoning": parsed.reasoning},
+    }
 
 
 async def step_efficiency_scorer(output):
