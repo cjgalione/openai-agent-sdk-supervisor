@@ -11,6 +11,7 @@ modal_image = (
     .pip_install_from_requirements("requirements.txt")
     .add_local_python_source("src")
     .add_local_python_source("evals")
+    .add_local_file("dataset.jsonl", "/root/dataset.jsonl")
 )
 
 app = modal.App(

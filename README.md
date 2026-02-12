@@ -34,17 +34,15 @@ graph TB
 Create `.env`:
 
 ```env
-OPENAI_API_KEY=...
-TAVILY_API_KEY=...
-BRAINTRUST_API_KEY=...
-BRAINTRUST_PROJECT=openai-agent-sdk-supervisor
-BRAINTRUST_ORG_NAME=Braintrust Demos
-MODAL_APP_NAME=curtis-41436-openai-agent-sdk-supervisor-eval-server
+OPENAI_API_KEY=<your-openai-api-key>
+TAVILY_API_KEY=<your-tavily-api-key>
+BRAINTRUST_API_KEY=<your-braintrust-api-key>
+BRAINTRUST_PROJECT=<your-braintrust-project-name>
+BRAINTRUST_ORG_NAME=<your-braintrust-org-name>
+MODAL_APP_NAME=<your-modal-app-name>
 ```
 
 Notes:
-- `BRAINTRUST_PROJECT` defaults to `openai-agent-sdk-supervisor`.
-- Use a Braintrust API key from the Braintrust Demos org (`29bd8276-80fc-4c70-a288-fc5ac901e5ef`).
 - `MODAL_APP_NAME` is configurable so deploys are scoped to your own Modal namespace.
 
 ## Install
