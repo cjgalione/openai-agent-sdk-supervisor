@@ -133,15 +133,80 @@ The supervisor can:
 """
 
 
+def _infer_agents_from_tool_name(tool_name: str) -> set[str]:
+    lowered = tool_name.lower()
+    agents: set[str] = set()
+
+    if any(
+        key in lowered
+        for key in (
+            "research",
+            "tavily",
+            "delegate_to_research_agent",
+            "request_research_subtask",
+        )
+    ):
+        agents.add("ResearchAgent")
+
+    if any(
+        key in lowered
+        for key in (
+            "math",
+            "delegate_to_math_agent",
+            "request_math_subtask",
+            "add",
+            "subtract",
+            "multiply",
+            "divide",
+        )
+    ):
+        agents.add("MathAgent")
+
+    return agents
+
+
+async def _collect_agents_called(trace: Any, output: Any) -> list[str]:
+    """Infer called agents from trace spans and serialized tool call messages."""
+    found: set[str] = set()
+
+    # Primary source: spans (task/function/llm) emitted during the run.
+    spans: list[Any] = []
+    try:
+        spans = await trace.get_spans(span_type=["task", "function", "llm"])
+    except Exception:
+        spans = []
+
+    for span in spans:
+        span_name = str(getattr(span, "span_attributes", {}).get("name", "") or "")
+        lowered = span_name.lower()
+        if span_name in {"MathAgent", "ResearchAgent"}:
+            found.add(span_name)
+        else:
+            found.update(_infer_agents_from_tool_name(lowered))
+
+    # Fallback source: serialized run output includes tool call names.
+    if isinstance(output, dict):
+        messages = output.get("messages", [])
+        if isinstance(messages, list):
+            for message in messages:
+                if not isinstance(message, dict):
+                    continue
+                tool_calls = message.get("tool_calls")
+                if not isinstance(tool_calls, list):
+                    continue
+                for tc in tool_calls:
+                    if not isinstance(tc, dict):
+                        continue
+                    tool_name = str(tc.get("name", "") or "")
+                    found.update(_infer_agents_from_tool_name(tool_name))
+
+    ordered = [name for name in ["ResearchAgent", "MathAgent"] if name in found]
+    return ordered
+
+
 async def routing_accuracy_scorer(input, output, expected, metadata, trace):
     choice_map = {"A": 1.0, "B": 0.7, "C": 0.3, "D": 0.0}
-    spans = await trace.get_spans(span_type=["task"])
-
-    agents_called: list[str] = []
-    for span in spans:
-        span_name = span.span_attributes.get("name", None)
-        if span_name in ["MathAgent", "ResearchAgent"]:
-            agents_called.append(span_name)
+    agents_called = await _collect_agents_called(trace, output)
 
     agents_called_str = (
         ", ".join(agents_called)
