@@ -106,7 +106,7 @@ async def run_question(question: str) -> tuple[str, bool]:
 
 
 async def main_async(args: argparse.Namespace) -> None:
-    num_questions = random.randint(1, 100)
+    num_questions = args.num_questions if args.num_questions is not None else random.randint(1, 100)
     questions = generate_questions(num_questions=num_questions, seed=args.seed)
 
     print(f"Generated {len(questions)} questions")
@@ -150,6 +150,12 @@ def main() -> None:
         type=int,
         default=None,
         help="Random seed for reproducibility",
+    )
+    parser.add_argument(
+        "--num-questions",
+        type=int,
+        default=None,
+        help="Exact number of questions to generate (default: random 1-100)",
     )
     parser.add_argument(
         "--fail-on-error",
