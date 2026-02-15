@@ -26,6 +26,23 @@ jobs:
       - name: Install dependencies with uv
         run: uv pip install -r requirements.txt --system
 
+      - name: Debug Braintrust key fingerprint (temporary)
+        env:
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import os
+
+          key = os.getenv("BRAINTRUST_API_KEY", "")
+          print("BT_KEY_LEN", len(key))
+          print("BT_KEY_PREFIX", key[:4] if key else "")
+          print("BT_KEY_SUFFIX", key[-4:] if len(key) >= 4 else key)
+          print("BT_KEY_SHA256", hashlib.sha256(key.encode()).hexdigest() if key else "")
+          print("BT_KEY_HAS_NEWLINE", "\n" in key)
+          print("BT_KEY_HAS_QUOTES", ("'" in key) or ('"' in key))
+          PY
+
       - name: Run queries
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
