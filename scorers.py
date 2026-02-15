@@ -78,7 +78,13 @@ project.scorers.create(
         "LLM-as-a-judge scorer for overall response quality, with guidance for "
         "concise math answers and compound research+math questions."
     ),
-    prompt=RESPONSE_QUALITY_PROMPT,
+    # Use chat-style messages to avoid OpenAI errors about missing `messages`.
+    messages=[
+        {
+            "role": "user",
+            "content": RESPONSE_QUALITY_PROMPT,
+        }
+    ],
     model=JUDGE_MODEL,
     use_cot=True,
     choice_scores={
