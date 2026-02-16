@@ -25,6 +25,9 @@ async def step_efficiency_scorer(output):
     max_steps = 8
     if isinstance(output, dict):
         num_steps = len(output.get("messages", []))
+    elif isinstance(output, list):
+        # Online scoring root spans often store output as a list of message-like items.
+        num_steps = len(output)
     elif isinstance(output, str):
         num_steps = 1 if output.strip() else 0
     else:
