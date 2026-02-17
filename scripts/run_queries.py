@@ -87,15 +87,18 @@ async def run_question(question: str) -> tuple[str, bool]:
     supervisor = get_supervisor(config=config, force_rebuild=True)
 
     try:
+        trace_metadata = {
+            "customer_id": f"customer_{random.randint(1000, 9999)}",
+            "selected_model": selected_model,
+        }
+        trace_metadata.update(config.supervisor_prompt_trace_metadata())
+
         result = await Runner.run(
             starting_agent=supervisor,
             input=question,
             run_config=RunConfig(
                 workflow_name="openai-agent-sdk-supervisor-batch",
-                trace_metadata={
-                    "customer_id": f"customer_{random.randint(1000, 9999)}",
-                    "selected_model": selected_model,
-                },
+                trace_metadata=trace_metadata,
             ),
         )
         print(f"✅ {question[:80]} -> {str(getattr(result, 'final_output', ''))[:80]}")

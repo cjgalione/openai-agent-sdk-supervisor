@@ -73,3 +73,27 @@ class MathModelParam(BaseModel):
         default=DEFAULT_MATH_MODEL,
         description="Model to use for the math agent (e.g., gpt-4o-mini, gpt-4o).",
     )
+
+
+class SupervisorPromptSlugParam(BaseModel):
+    """Braintrust prompt slug for supervisor instructions."""
+
+    value: str = Field(
+        default="",
+        description=(
+            "Optional Braintrust prompt slug for supervisor instructions. "
+            "When set, evals load prompt text from Braintrust via load_prompt()."
+        ),
+    )
+
+
+class SupervisorPromptVersionParam(BaseModel):
+    """Optional Braintrust prompt version for supervisor instructions."""
+
+    value: str = Field(
+        default="",
+        description=(
+            "Optional Braintrust prompt version (xact ID or version) to pin "
+            "the supervisor prompt loaded from slug."
+        ),
+    )

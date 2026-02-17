@@ -15,6 +15,7 @@ from rich.prompt import Prompt
 from rich.text import Text
 
 from src.agent_graph import get_supervisor
+from src.config import AgentConfig
 
 DEFAULT_BRAINTRUST_PROJECT = "openai-agent-sdk-supervisor"
 
@@ -42,7 +43,8 @@ async def _run_chat() -> None:
     else:
         set_trace_processors([])
 
-    supervisor = get_supervisor()
+    config = AgentConfig()
+    supervisor = get_supervisor(config=config, force_rebuild=True)
     session = SQLiteSession(session_id=f"local-{uuid.uuid4().hex}")
 
     welcome_text = Text("OpenAI Agents SDK Supervisor Chat", style="bold cyan")
@@ -72,7 +74,10 @@ async def _run_chat() -> None:
                     session=session,
                     run_config=RunConfig(
                         workflow_name="openai-agent-sdk-supervisor-local",
-                        trace_metadata={"surface": "local_runner"},
+                        trace_metadata={
+                            "surface": "local_runner",
+                            **config.supervisor_prompt_trace_metadata(),
+                        },
                     ),
                 )
 

@@ -26,6 +26,8 @@ from evals.parameters import (  # noqa: E402
     ResearchAgentPromptParam,
     ResearchModelParam,
     SupervisorModelParam,
+    SupervisorPromptSlugParam,
+    SupervisorPromptVersionParam,
     SystemPromptParam,
 )
 from src.agents.deep_agent import get_supervisor  # noqa: E402
@@ -76,12 +78,16 @@ async def run_supervisor_task(input: dict, hooks: Any = None) -> dict[str, list]
         supervisor = get_supervisor(config=config, force_rebuild=True)
         query = extract_query_from_input(input)
 
+        trace_metadata = {"eval_type": "supervisor"}
+        if config is not None:
+            trace_metadata.update(config.supervisor_prompt_trace_metadata())
+
         result = await Runner.run(
             starting_agent=supervisor,
             input=query,
             run_config=RunConfig(
                 workflow_name="openai-agent-sdk-supervisor-eval-supervisor",
-                trace_metadata={"eval_type": "supervisor"},
+                trace_metadata=trace_metadata,
             ),
         )
         serialized_messages = serialize_run_result(result, user_query=query)
@@ -401,6 +407,8 @@ Eval(
     ],  # type: ignore
     parameters={
         "system_prompt": SystemPromptParam,
+        "supervisor_prompt_slug": SupervisorPromptSlugParam,
+        "supervisor_prompt_version": SupervisorPromptVersionParam,
         "research_agent_prompt": ResearchAgentPromptParam,
         "math_agent_prompt": MathAgentPromptParam,
         "supervisor_model": SupervisorModelParam,

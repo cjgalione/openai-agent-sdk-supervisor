@@ -40,10 +40,15 @@ BRAINTRUST_API_KEY=<your-braintrust-api-key>
 BRAINTRUST_PROJECT=<your-braintrust-project-name>
 BRAINTRUST_ORG_NAME=<your-braintrust-org-name>
 MODAL_APP_NAME=<your-modal-app-name>
+BRAINTRUST_SUPERVISOR_PROMPT_SLUG=<your-supervisor-prompt-slug>
+BRAINTRUST_SUPERVISOR_PROMPT_VERSION=<optional-prompt-version>
+BRAINTRUST_SUPERVISOR_PROMPT_PROJECT=<optional-prompt-project-name>
+BRAINTRUST_SUPERVISOR_PROMPT_PROJECT_ID=<optional-prompt-project-id>
 ```
 
 Notes:
 - `MODAL_APP_NAME` is configurable so deploys are scoped to your own Modal namespace.
+- If `BRAINTRUST_SUPERVISOR_PROMPT_SLUG` is set, supervisor instructions are loaded from Braintrust via the Python SDK (`load_prompt`) with optional version pinning.
 
 ## Install
 

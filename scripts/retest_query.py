@@ -226,6 +226,7 @@ async def _run(args: argparse.Namespace) -> None:
         math_model=math_model,
     )
     supervisor = get_supervisor(config=config, force_rebuild=True)
+    metadata.update(config.supervisor_prompt_trace_metadata())
 
     try:
         result = await Runner.run(

@@ -1,6 +1,8 @@
 """Configuration for the OpenAI Agents SDK supervisor and subagents."""
 
 from datetime import datetime
+import os
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -84,6 +86,69 @@ DEFAULT_RESEARCH_MODEL = "gpt-4o-mini"
 DEFAULT_MATH_MODEL = "gpt-4o-mini"
 
 
+def _content_to_text(content: Any) -> str:
+    """Normalize prompt content variants into plain text."""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        chunks: list[str] = []
+        for part in content:
+            if isinstance(part, str):
+                chunks.append(part)
+            elif isinstance(part, dict):
+                text = part.get("text")
+                if isinstance(text, str):
+                    chunks.append(text)
+            else:
+                text = getattr(part, "text", None)
+                if isinstance(text, str):
+                    chunks.append(text)
+        return "\n".join(chunks).strip()
+    if isinstance(content, dict):
+        text = content.get("text")
+        return text if isinstance(text, str) else ""
+    return str(content)
+
+
+def _extract_prompt_text(prompt_obj: Any) -> str:
+    """Extract supervisor instructions from a Braintrust prompt object."""
+    prompt_block = getattr(prompt_obj, "prompt", None)
+    if prompt_block is None:
+        return ""
+
+    prompt_type = getattr(prompt_block, "type", None)
+    if prompt_type == "completion":
+        return _content_to_text(getattr(prompt_block, "content", ""))
+
+    if prompt_type == "chat":
+        messages = getattr(prompt_block, "messages", None) or []
+        system_chunks: list[str] = []
+        first_chunk = ""
+
+        for message in messages:
+            if isinstance(message, dict):
+                role = str(message.get("role", "")).lower()
+                content = _content_to_text(message.get("content"))
+            else:
+                role = str(getattr(message, "role", "")).lower()
+                content = _content_to_text(getattr(message, "content", None))
+
+            if not content:
+                continue
+            if not first_chunk:
+                first_chunk = content
+            if role == "system":
+                system_chunks.append(content)
+
+        if system_chunks:
+            return "\n\n".join(system_chunks).strip()
+        return first_chunk
+
+    return ""
+
+
 class AgentConfig(BaseModel):
     """Configuration for the supervisor and subagents.
 
@@ -92,6 +157,18 @@ class AgentConfig(BaseModel):
 
     # Supervisor/System prompt
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
+    supervisor_prompt_slug: str | None = os.environ.get(
+        "BRAINTRUST_SUPERVISOR_PROMPT_SLUG"
+    )
+    supervisor_prompt_version: str | None = os.environ.get(
+        "BRAINTRUST_SUPERVISOR_PROMPT_VERSION"
+    )
+    supervisor_prompt_project: str | None = os.environ.get(
+        "BRAINTRUST_SUPERVISOR_PROMPT_PROJECT", os.environ.get("BRAINTRUST_PROJECT")
+    )
+    supervisor_prompt_project_id: str | None = os.environ.get(
+        "BRAINTRUST_SUPERVISOR_PROMPT_PROJECT_ID"
+    )
 
     # Subagent prompts
     research_agent_prompt: str = DEFAULT_RESEARCH_AGENT_PROMPT
@@ -105,5 +182,66 @@ class AgentConfig(BaseModel):
     supervisor_model: str = DEFAULT_SUPERVISOR_MODEL
     research_model: str = DEFAULT_RESEARCH_MODEL
     math_model: str = DEFAULT_MATH_MODEL
+
+    # Runtime metadata (set during prompt resolution)
+    resolved_supervisor_prompt_source: str = "local_default"
+    resolved_supervisor_prompt_slug: str | None = None
+    resolved_supervisor_prompt_version: str | None = None
+    resolved_supervisor_prompt_id: str | None = None
+
+    def resolve_supervisor_prompt(self) -> str:
+        """Resolve supervisor instructions from Braintrust prompt slug or local default."""
+        slug = (self.supervisor_prompt_slug or "").strip()
+        version = (self.supervisor_prompt_version or "").strip() or None
+        if not slug:
+            self.resolved_supervisor_prompt_source = "local_default"
+            self.resolved_supervisor_prompt_slug = None
+            self.resolved_supervisor_prompt_version = None
+            self.resolved_supervisor_prompt_id = None
+            return self.system_prompt
+
+        try:
+            from braintrust import load_prompt
+
+            prompt_obj = load_prompt(
+                project=self.supervisor_prompt_project,
+                project_id=self.supervisor_prompt_project_id,
+                slug=slug,
+                version=version,
+                api_key=os.environ.get("BRAINTRUST_API_KEY"),
+                org_name=os.environ.get("BRAINTRUST_ORG_NAME"),
+            )
+            resolved_text = _extract_prompt_text(prompt_obj)
+            if not resolved_text:
+                raise ValueError(
+                    "Loaded Braintrust prompt but could not extract non-empty text."
+                )
+
+            self.resolved_supervisor_prompt_source = "braintrust_prompt"
+            self.resolved_supervisor_prompt_slug = slug
+            self.resolved_supervisor_prompt_version = str(
+                getattr(prompt_obj, "version", self.supervisor_prompt_version) or ""
+            ) or None
+            self.resolved_supervisor_prompt_id = getattr(prompt_obj, "id", None)
+            return resolved_text
+        except Exception as exc:
+            print(
+                f"Warning: failed to load Braintrust supervisor prompt slug={slug!r}: {exc}. "
+                "Falling back to local system_prompt."
+            )
+            self.resolved_supervisor_prompt_source = "local_fallback_after_prompt_load_error"
+            self.resolved_supervisor_prompt_slug = slug
+            self.resolved_supervisor_prompt_version = version
+            self.resolved_supervisor_prompt_id = None
+            return self.system_prompt
+
+    def supervisor_prompt_trace_metadata(self) -> dict[str, Any]:
+        """Emit trace metadata describing which supervisor prompt source was used."""
+        return {
+            "supervisor_prompt_source": self.resolved_supervisor_prompt_source,
+            "supervisor_prompt_slug": self.resolved_supervisor_prompt_slug,
+            "supervisor_prompt_version": self.resolved_supervisor_prompt_version,
+            "supervisor_prompt_id": self.resolved_supervisor_prompt_id,
+        }
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
