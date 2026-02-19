@@ -88,6 +88,8 @@ async def run_question(question: str) -> tuple[str, bool]:
 
     try:
         trace_metadata = {
+            "source": "daily_job",
+            "job_name": "run_queries",
             "customer_id": f"customer_{random.randint(1000, 9999)}",
             "selected_model": selected_model,
         }

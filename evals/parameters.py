@@ -97,3 +97,16 @@ class SupervisorPromptVersionParam(BaseModel):
             "the supervisor prompt loaded from slug."
         ),
     )
+
+
+SUPERVISOR_PROMPT_UI_PARAM = {
+    "type": "prompt",
+    "description": (
+        "Optional prompt selector for supervisor instructions. "
+        "If a saved prompt slug is selected, eval loads latest version by slug."
+    ),
+    "default": {
+        "messages": [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT.strip()}],
+        "model": DEFAULT_SUPERVISOR_MODEL,
+    },
+}

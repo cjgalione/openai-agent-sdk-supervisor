@@ -25,6 +25,7 @@ from evals.parameters import (  # noqa: E402
     MathModelParam,
     ResearchAgentPromptParam,
     ResearchModelParam,
+    SUPERVISOR_PROMPT_UI_PARAM,
     SupervisorModelParam,
     SupervisorPromptSlugParam,
     SupervisorPromptVersionParam,
@@ -68,11 +69,102 @@ def unwrap_parameters(params: dict) -> dict:
     return result
 
 
+def _extract_system_prompt_from_messages(messages: Any) -> str | None:
+    if not isinstance(messages, list):
+        return None
+    first_nonempty: str | None = None
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        role = str(message.get("role", "")).lower()
+        content = message.get("content")
+        if isinstance(content, list):
+            parts = []
+            for part in content:
+                if isinstance(part, str):
+                    parts.append(part)
+                elif isinstance(part, dict) and isinstance(part.get("text"), str):
+                    parts.append(part["text"])
+            text = "\n".join(parts).strip()
+        else:
+            text = str(content).strip() if content is not None else ""
+        if not text:
+            continue
+        if first_nonempty is None:
+            first_nonempty = text
+        if role == "system":
+            return text
+    return first_nonempty
+
+
+def _extract_ui_prompt_selection(prompt_param: Any) -> tuple[str | None, dict[str, str]]:
+    """Parse optional `supervisor_prompt` UI parameter into text/slug metadata."""
+    if prompt_param is None:
+        return None, {}
+
+    metadata: dict[str, str] = {}
+    prompt_data: Any = prompt_param
+
+    # Braintrust Prompt objects can expose `.build()`.
+    build_fn = getattr(prompt_param, "build", None)
+    if callable(build_fn):
+        try:
+            built = build_fn()
+            prompt_data = built if built is not None else prompt_param
+        except Exception:
+            prompt_data = prompt_param
+
+    # Surface slug/version/id when present so task can prefer latest by slug.
+    for key in ("slug", "version", "id"):
+        value = None
+        if isinstance(prompt_param, dict):
+            value = prompt_param.get(key)
+        else:
+            value = getattr(prompt_param, key, None)
+        if value:
+            metadata[f"ui_prompt_{key}"] = str(value)
+
+    if isinstance(prompt_data, dict):
+        # Common built chat prompt shape.
+        text = _extract_system_prompt_from_messages(prompt_data.get("messages"))
+        if text:
+            return text, metadata
+
+        # Fallback if prompt data is nested.
+        nested = prompt_data.get("prompt")
+        if isinstance(nested, dict):
+            text = _extract_system_prompt_from_messages(nested.get("messages"))
+            if text:
+                return text, metadata
+            content = nested.get("content")
+            if isinstance(content, str) and content.strip():
+                return content.strip(), metadata
+
+    return None, metadata
+
+
 async def run_supervisor_task(input: dict, hooks: Any = None) -> dict[str, list]:
     """Run a single task through the supervisor and return serialized messages."""
     try:
         params = hooks.parameters if hooks and hasattr(hooks, "parameters") else {}
         config_params = unwrap_parameters(params)
+        ui_prompt_param = params.get("supervisor_prompt") if isinstance(params, dict) else None
+        ui_prompt_text, ui_prompt_meta = _extract_ui_prompt_selection(ui_prompt_param)
+
+        # Not an AgentConfig field; handled separately.
+        config_params.pop("supervisor_prompt", None)
+
+        # Precedence:
+        # 1) UI selected saved prompt slug -> load latest via load_prompt
+        # 2) UI inline prompt text
+        # 3) explicit slug/version config or default local prompt
+        ui_slug = ui_prompt_meta.get("ui_prompt_slug")
+        if ui_slug:
+            config_params["supervisor_prompt_slug"] = ui_slug
+            config_params["supervisor_prompt_version"] = ""
+        elif ui_prompt_text:
+            config_params["system_prompt"] = ui_prompt_text
+
         config = AgentConfig(**config_params) if config_params else None
 
         supervisor = get_supervisor(config=config, force_rebuild=True)
@@ -81,6 +173,7 @@ async def run_supervisor_task(input: dict, hooks: Any = None) -> dict[str, list]
         trace_metadata = {"eval_type": "supervisor"}
         if config is not None:
             trace_metadata.update(config.supervisor_prompt_trace_metadata())
+        trace_metadata.update(ui_prompt_meta)
 
         result = await Runner.run(
             starting_agent=supervisor,
@@ -398,6 +491,7 @@ step_efficiency_score = (
 
 Eval(
     project_name,
+    experiment_name="supervisor",
     data=get_eval_data(project_name),
     task=run_supervisor_task,
     scores=[
@@ -414,5 +508,25 @@ Eval(
         "supervisor_model": SupervisorModelParam,
         "research_model": ResearchModelParam,
         "math_model": MathModelParam,
+    },
+)
+
+# Separate eval variant that exposes a prompt-type supervisor parameter in UI.
+Eval(
+    project_name,
+    experiment_name="supervisor-prompt-ui",
+    data=get_eval_data(project_name),
+    task=run_supervisor_task,
+    scores=[
+        response_quality_scorer,
+        routing_accuracy_scorer,
+        step_efficiency_score,
+    ],  # type: ignore
+    parameters={
+        "supervisor_prompt": SUPERVISOR_PROMPT_UI_PARAM,
+        "supervisor_prompt_slug": SupervisorPromptSlugParam,
+        "supervisor_prompt_version": SupervisorPromptVersionParam,
+        "supervisor_model": SupervisorModelParam,
+        "system_prompt": SystemPromptParam,
     },
 )
