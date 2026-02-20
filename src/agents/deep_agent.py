@@ -10,6 +10,7 @@ from src.config import AgentConfig
 def get_deep_agent(config: AgentConfig | None = None) -> Agent:
     """Create the supervisor agent and wire handoffs to subagents."""
     resolved_config = config or AgentConfig()
+    supervisor_prompt = resolved_config.render_supervisor_prompt()
 
     shared_model_settings = ModelSettings(parallel_tool_calls=False)
 
@@ -49,7 +50,7 @@ def get_deep_agent(config: AgentConfig | None = None) -> Agent:
     return Agent(
         name="Supervisor Agent",
         model=resolved_config.supervisor_model,
-        instructions=resolved_config.system_prompt,
+        instructions=supervisor_prompt,
         model_settings=shared_model_settings,
         handoffs=[
             handoff(

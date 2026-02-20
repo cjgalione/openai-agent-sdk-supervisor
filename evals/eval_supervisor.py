@@ -23,6 +23,7 @@ from evals.braintrust_parameter_patch import apply_parameter_patch  # noqa: E402
 from evals.parameters import (  # noqa: E402
     MathAgentPromptParam,
     MathModelParam,
+    PromptModificationParam,
     ResearchAgentPromptParam,
     ResearchModelParam,
     SupervisorModelParam,
@@ -401,6 +402,7 @@ Eval(
     ],  # type: ignore
     parameters={
         "system_prompt": SystemPromptParam,
+        "prompt_modification": PromptModificationParam,
         "research_agent_prompt": ResearchAgentPromptParam,
         "math_agent_prompt": MathAgentPromptParam,
         "supervisor_model": SupervisorModelParam,

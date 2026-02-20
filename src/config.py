@@ -92,6 +92,7 @@ class AgentConfig(BaseModel):
 
     # Supervisor/System prompt
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
+    prompt_modification: str = ""
 
     # Subagent prompts
     research_agent_prompt: str = DEFAULT_RESEARCH_AGENT_PROMPT
@@ -105,5 +106,19 @@ class AgentConfig(BaseModel):
     supervisor_model: str = DEFAULT_SUPERVISOR_MODEL
     research_model: str = DEFAULT_RESEARCH_MODEL
     math_model: str = DEFAULT_MATH_MODEL
+
+    def render_supervisor_prompt(self) -> str:
+        """Build supervisor prompt with optional append-only modification block."""
+        modification = self.prompt_modification.strip()
+        if not modification:
+            return self.system_prompt
+
+        return (
+            f"{self.system_prompt.rstrip()}\n\n"
+            "USER GROUP MODIFICATION (APPEND-ONLY):\n"
+            f"{modification}\n\n"
+            "Apply the modification above as additional guidance only when it does not "
+            "conflict with core routing/safety constraints in the base supervisor prompt."
+        )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
