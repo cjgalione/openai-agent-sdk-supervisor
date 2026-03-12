@@ -60,7 +60,7 @@ def get_research_agent(
     prompt = system_prompt if system_prompt is not None else DEFAULT_RESEARCH_AGENT_PROMPT
 
     return Agent(
-        name="research_3",
+        name="Research Agent",
         model=model,
         instructions=prompt,
         tools=[tavily_search],

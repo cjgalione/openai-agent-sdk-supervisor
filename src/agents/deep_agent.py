@@ -48,7 +48,7 @@ def get_deep_agent(config: AgentConfig | None = None) -> Agent:
     ]
 
     return Agent(
-        name="supervisor_3",
+        name="Supervisor Agent",
         model=resolved_config.supervisor_model,
         instructions=supervisor_prompt,
         model_settings=shared_model_settings,

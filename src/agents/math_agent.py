@@ -40,7 +40,7 @@ def get_math_agent(system_prompt: str | None = None, model: str = "gpt-4o-mini")
     prompt = system_prompt if system_prompt is not None else DEFAULT_MATH_AGENT_PROMPT
 
     return Agent(
-        name="math_3",
+        name="Math Agent",
         model=model,
         instructions=prompt,
         tools=[add, subtract, multiply, divide],
