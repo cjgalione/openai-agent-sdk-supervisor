@@ -18,7 +18,7 @@ from dotenv import load_dotenv  # noqa: E402
 
 from evals.parameters import ResearchAgentPromptParam, ResearchModelParam  # noqa: E402
 from src.agents.research_agent import get_research_agent  # noqa: E402
-from src.helpers import serialize_run_result  # noqa: E402
+from src.helpers import extract_query_from_input, serialize_run_result  # noqa: E402
 
 load_dotenv()
 
@@ -38,7 +38,7 @@ def _param_value(param: Any, default: Any) -> Any:
     return param
 
 
-async def run_research_task(input: dict, hooks: Any = None) -> dict:
+async def run_research_task(input: Any, hooks: Any = None) -> dict:
     """Run a research query through the research agent."""
     try:
         params = hooks.parameters if hooks and hasattr(hooks, "parameters") else {}
@@ -49,7 +49,7 @@ async def run_research_task(input: dict, hooks: Any = None) -> dict:
             system_prompt=research_agent_prompt,
             model=research_model,
         )
-        query = str(input.get("query", ""))
+        query = extract_query_from_input(input)
 
         result = await Runner.run(
             starting_agent=agent,
@@ -112,7 +112,7 @@ async def web_search_usage_scorer(output, metadata=None):
 
 async def source_attribution_scorer(output):
     """Check if the response includes URL citations."""
-    messages = output.get("messages", [])
+    messages = _messages_from_output(output)
     for msg in reversed(messages):
         content = msg.get("content", "") if isinstance(msg, dict) else ""
         role = msg.get("role", "") if isinstance(msg, dict) else ""
@@ -121,6 +121,15 @@ async def source_attribution_scorer(output):
                 return 1.0
             break
     return 0.0
+
+
+def _messages_from_output(output: Any) -> list[Any]:
+    if isinstance(output, dict):
+        messages = output.get("messages")
+        return messages if isinstance(messages, list) else []
+    if isinstance(output, list):
+        return output
+    return []
 
 
 async def efficiency_scorer(output, metadata=None):

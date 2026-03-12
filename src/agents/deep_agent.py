@@ -15,11 +15,11 @@ def get_deep_agent(config: AgentConfig | None = None) -> Agent:
     shared_model_settings = ModelSettings(parallel_tool_calls=False)
 
     research_agent = get_research_agent(
-        system_prompt=resolved_config.research_agent_prompt,
+        system_prompt=resolved_config.render_research_prompt(),
         model=resolved_config.research_model,
     )
     math_agent = get_math_agent(
-        system_prompt=resolved_config.math_agent_prompt,
+        system_prompt=resolved_config.render_math_prompt(),
         model=resolved_config.math_model,
     )
 
@@ -48,7 +48,7 @@ def get_deep_agent(config: AgentConfig | None = None) -> Agent:
     ]
 
     return Agent(
-        name="Supervisor Agent",
+        name="supervisor_3",
         model=resolved_config.supervisor_model,
         instructions=supervisor_prompt,
         model_settings=shared_model_settings,

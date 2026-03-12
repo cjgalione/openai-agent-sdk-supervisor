@@ -1,5 +1,6 @@
 .env
 .venv/
+.venv_run/
 __pycache__/
 .DS_Store
 .claude/

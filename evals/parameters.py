@@ -31,13 +31,14 @@ class SystemPromptParam(BaseModel):
 
 
 class PromptModificationParam(BaseModel):
-    """Append-only supervisor prompt modification parameter."""
+    """Append-only prompt modification parameter for supervisor and subagents."""
 
     value: str = Field(
         default="",
         description=(
-            "Optional append-only modification for the supervisor prompt. "
-            "Use this to tune routing criteria without replacing the full base prompt."
+            "Optional append-only modification applied to supervisor, research, and math "
+            "agent prompts. Use this for output-style or policy tweaks without replacing "
+            "the full base prompts."
         ),
     )
 

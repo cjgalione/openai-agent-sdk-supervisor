@@ -4,9 +4,30 @@ import os
 
 import modal
 
+CORS_ALLOWED_HEADERS = [
+    "Authorization",
+    "Content-Type",
+    "X-Amz-Date",
+    "X-Api-Key",
+    "X-Amz-Security-Token",
+    "x-bt-auth-token",
+    "x-bt-parent",
+    "x-bt-org-name",
+    "x-bt-project-id",
+    "x-bt-stream-fmt",
+    "x-bt-use-cache",
+    "x-bt-use-gateway",
+    "x-stainless-os",
+    "x-stainless-lang",
+    "x-stainless-package-version",
+    "x-stainless-runtime",
+    "x-stainless-runtime-version",
+    "x-stainless-arch",
+]
+
 # Create image with all dependencies
 modal_image = (
-    modal.Image.debian_slim()
+    modal.Image.debian_slim(python_version="3.11")
     .apt_install("git")
     .pip_install_from_requirements("requirements.txt")
     .add_local_python_source("src")
@@ -46,6 +67,7 @@ def braintrust_eval_server():
 
     from braintrust.cli.eval import EvaluatorState, FileHandle, update_evaluators
     from braintrust.devserver.server import create_app
+    from starlette.middleware.cors import CORSMiddleware
 
     import evals
 
@@ -72,9 +94,28 @@ def braintrust_eval_server():
 
     print(f"Loaded {len(evaluators)} evaluator(s): {[e.eval_name for e in evaluators]}")
 
-    # Use Braintrust's built-in create_app which handles all the setup
-    # This creates a Starlette ASGI app with routes, middleware, etc.
-    return create_app(evaluators, org_name=None)
+    # Use Braintrust's built-in create_app which handles all the setup.
+    # Add an outer CORS layer to ensure Playground-specific headers like
+    # `x-bt-use-gateway` are accepted during browser preflight requests.
+    asgi_app = create_app(evaluators, org_name=None)
+    asgi_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "https://www.braintrust.dev",
+            "https://www.braintrustdata.com",
+        ],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+        allow_headers=CORS_ALLOWED_HEADERS,
+        expose_headers=[
+            "x-bt-cursor",
+            "x-bt-found-existing-experiment",
+            "x-bt-span-id",
+            "x-bt-span-export",
+        ],
+        max_age=86400,
+    )
+    return asgi_app
 
 
 # Optional: Add a local entrypoint for testing

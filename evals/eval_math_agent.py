@@ -18,7 +18,7 @@ from dotenv import load_dotenv  # noqa: E402
 
 from evals.parameters import MathAgentPromptParam, MathModelParam  # noqa: E402
 from src.agents.math_agent import get_math_agent  # noqa: E402
-from src.helpers import serialize_run_result  # noqa: E402
+from src.helpers import extract_query_from_input, serialize_run_result  # noqa: E402
 
 load_dotenv()
 
@@ -38,7 +38,7 @@ def _param_value(param: Any, default: Any) -> Any:
     return param
 
 
-async def run_math_task(input: dict, hooks: Any = None) -> dict:
+async def run_math_task(input: Any, hooks: Any = None) -> dict:
     """Run a math calculation through the math agent."""
     try:
         params = hooks.parameters if hooks and hasattr(hooks, "parameters") else {}
@@ -46,7 +46,7 @@ async def run_math_task(input: dict, hooks: Any = None) -> dict:
         math_model = _param_value(params.get("math_model"), "gpt-4o-mini")
 
         agent = get_math_agent(system_prompt=math_agent_prompt, model=math_model)
-        query = str(input.get("query", ""))
+        query = extract_query_from_input(input)
 
         result = await Runner.run(
             starting_agent=agent,
@@ -100,7 +100,7 @@ async def calculation_accuracy_scorer(input, output, expected):
         return 0.5
 
     expected_answer = expected["expected_answer"]
-    messages = output.get("messages", [])
+    messages = _messages_from_output(output)
 
     for msg in reversed(messages):
         content = msg.get("content", "") if isinstance(msg, dict) else ""
@@ -145,7 +145,7 @@ async def efficiency_scorer(output, metadata=None):
 
 async def response_format_scorer(output):
     """Check if the response is clear and includes the final answer."""
-    messages = output.get("messages", [])
+    messages = _messages_from_output(output)
     for msg in reversed(messages):
         content = msg.get("content", "") if isinstance(msg, dict) else ""
         role = msg.get("role", "") if isinstance(msg, dict) else ""
@@ -155,6 +155,15 @@ async def response_format_scorer(output):
                 return 1.0
             break
     return 0.0
+
+
+def _messages_from_output(output: Any) -> list[Any]:
+    if isinstance(output, dict):
+        messages = output.get("messages")
+        return messages if isinstance(messages, list) else []
+    if isinstance(output, list):
+        return output
+    return []
 
 
 calculation_correctness_prompt = """

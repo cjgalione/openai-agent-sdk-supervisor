@@ -8,20 +8,108 @@ from typing import Any
 from agents import ItemHelpers
 
 
-def extract_query_from_input(input_payload: dict[str, Any]) -> str:
+def _extract_text(content: Any) -> str | None:
+    if isinstance(content, str):
+        stripped = content.strip()
+        return stripped or None
+
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                text = item.strip()
+                if text:
+                    parts.append(text)
+                continue
+
+            if not isinstance(item, dict):
+                continue
+
+            if isinstance(item.get("text"), str) and item["text"].strip():
+                parts.append(item["text"].strip())
+                continue
+
+            nested = _extract_text(item.get("content"))
+            if nested:
+                parts.append(nested)
+
+        if parts:
+            return "\n".join(parts)
+        return None
+
+    if isinstance(content, dict):
+        if isinstance(content.get("text"), str) and content["text"].strip():
+            return content["text"].strip()
+        return _extract_text(content.get("content"))
+
+    return None
+
+
+def _extract_query_from_messages(messages: list[Any]) -> str | None:
+    # Prefer the latest user message with text content.
+    for message in reversed(messages):
+        if isinstance(message, str):
+            text = message.strip()
+            if text:
+                return text
+            continue
+
+        if not isinstance(message, dict):
+            continue
+
+        role = str(message.get("role", "") or "")
+        if role and role not in {"user", "system"}:
+            continue
+
+        text = _extract_text(message.get("content"))
+        if text:
+            return text
+
+    # Fallback: any message-like item with content.
+    for message in messages:
+        if isinstance(message, dict):
+            text = _extract_text(message.get("content"))
+            if text:
+                return text
+    return None
+
+
+def extract_query_from_input(input_payload: Any) -> str:
     """Extract a user query from eval input payloads."""
-    if "query" in input_payload and input_payload["query"]:
-        return str(input_payload["query"])
+    if isinstance(input_payload, str):
+        text = input_payload.strip()
+        if text:
+            return text
 
-    messages = input_payload.get("messages", [])
-    if isinstance(messages, list) and messages:
-        first_message = messages[0]
-        if isinstance(first_message, dict):
-            content = first_message.get("content")
-            if isinstance(content, str):
-                return content
+    if isinstance(input_payload, list):
+        extracted = _extract_query_from_messages(input_payload)
+        if extracted:
+            return extracted
 
-    raise ValueError("Could not extract user query from input payload")
+    if isinstance(input_payload, dict):
+        query_text = _extract_text(input_payload.get("query"))
+        if query_text:
+            return query_text
+
+        messages = input_payload.get("messages")
+        if isinstance(messages, list):
+            extracted = _extract_query_from_messages(messages)
+            if extracted:
+                return extracted
+
+        nested_input = input_payload.get("input")
+        if nested_input is not None and nested_input is not input_payload:
+            extracted = _extract_text(nested_input)
+            if extracted:
+                return extracted
+            try:
+                return extract_query_from_input(nested_input)
+            except ValueError:
+                pass
+
+    raise ValueError(
+        f"Could not extract user query from input payload (type={type(input_payload).__name__})"
+    )
 
 
 def _parse_args(raw_args: Any) -> Any:

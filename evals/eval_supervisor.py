@@ -13,7 +13,6 @@ if str(project_root) not in sys.path:
 
 from agents import RunConfig, Runner, set_trace_processors  # noqa: E402
 from braintrust import Eval, init_dataset, init_function, init_logger  # noqa: E402
-from braintrust.oai import wrap_openai  # noqa: E402
 from braintrust.wrappers.openai import BraintrustTracingProcessor  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 from openai import OpenAI  # noqa: E402
@@ -42,7 +41,9 @@ apply_parameter_patch()
 DEFAULT_BRAINTRUST_PROJECT = "openai-agent-sdk-supervisor"
 DEFAULT_BRAINTRUST_DATASET = "OpenAI Agent SDK Supervisor Dataset"
 
-client = wrap_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
+# Keep scorer model calls out of Braintrust span logs by default to avoid
+# noisy root-level LLM traces in Playground/eval runs.
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 def unwrap_parameters(params: dict) -> dict:
@@ -375,38 +376,51 @@ def get_eval_data(project_name: str):
 
 
 project_name = os.environ.get("BRAINTRUST_PROJECT", DEFAULT_BRAINTRUST_PROJECT)
-logger = init_logger(
-    project=project_name,
-    api_key=os.environ.get("BRAINTRUST_API_KEY"),
-    org_name=os.environ.get("BRAINTRUST_ORG_NAME", "Braintrust Demos"),
-)
-set_trace_processors([BraintrustTracingProcessor(logger)])
+disable_auto_eval = os.environ.get("BRAINTRUST_DISABLE_AUTO_EVAL", "0").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 
-use_published_step_scorer = (
-    os.environ.get("USE_PUBLISHED_STEP_SCORER", "1").lower() in {"1", "true", "yes"}
-)
-step_efficiency_score = (
-    init_function(project_name=project_name, slug="step-efficiency")
-    if use_published_step_scorer
-    else step_efficiency_scorer
-)
+if not disable_auto_eval:
+    logger = init_logger(
+        project=project_name,
+        api_key=os.environ.get("BRAINTRUST_API_KEY"),
+        org_name=os.environ.get("BRAINTRUST_ORG_NAME", "Braintrust Demos"),
+    )
+    enable_detailed_agent_traces = (
+        os.environ.get("BRAINTRUST_ENABLE_DETAILED_AGENT_TRACES", "0").lower()
+        in {"1", "true", "yes"}
+    )
+    set_trace_processors(
+        [BraintrustTracingProcessor(logger)] if enable_detailed_agent_traces else []
+    )
 
-Eval(
-    project_name,
-    data=get_eval_data(project_name),
-    task=run_supervisor_task,
-    scores=[
-        response_quality_scorer,
-        routing_accuracy_scorer,
-        step_efficiency_score,
-    ],  # type: ignore
-    parameters={
-        "system_prompt": SystemPromptParam,
-        "prompt_modification": PromptModificationParam,
-        "research_agent_prompt": ResearchAgentPromptParam,
-        "math_agent_prompt": MathAgentPromptParam,
-        "supervisor_model": SupervisorModelParam,
-        "research_model": ResearchModelParam,
-        "math_model": MathModelParam,
-    },
-)
+    use_published_step_scorer = (
+        os.environ.get("USE_PUBLISHED_STEP_SCORER", "1").lower() in {"1", "true", "yes"}
+    )
+    step_efficiency_score = (
+        init_function(project_name=project_name, slug="step-efficiency")
+        if use_published_step_scorer
+        else step_efficiency_scorer
+    )
+
+    Eval(
+        project_name,
+        data=get_eval_data(project_name),
+        task=run_supervisor_task,
+        scores=[
+            response_quality_scorer,
+            routing_accuracy_scorer,
+            step_efficiency_score,
+        ],  # type: ignore
+        parameters={
+            "system_prompt": SystemPromptParam,
+            "prompt_modification": PromptModificationParam,
+            "research_agent_prompt": ResearchAgentPromptParam,
+            "math_agent_prompt": MathAgentPromptParam,
+            "supervisor_model": SupervisorModelParam,
+            "research_model": ResearchModelParam,
+            "math_model": MathModelParam,
+        },
+    )

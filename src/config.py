@@ -107,18 +107,50 @@ class AgentConfig(BaseModel):
     research_model: str = DEFAULT_RESEARCH_MODEL
     math_model: str = DEFAULT_MATH_MODEL
 
-    def render_supervisor_prompt(self) -> str:
-        """Build supervisor prompt with optional append-only modification block."""
+    def _append_prompt_modification(self, base_prompt: str, scope: str) -> str:
+        """Append prompt modification to a base prompt for a given agent scope."""
         modification = self.prompt_modification.strip()
         if not modification:
-            return self.system_prompt
+            return base_prompt
+
+        if scope == "supervisor":
+            guidance = (
+                "Apply the modification above as additional guidance only when it does "
+                "not conflict with core routing/safety constraints in the base "
+                "supervisor prompt."
+            )
+        else:
+            guidance = (
+                "Apply the modification above as additional guidance only when it does "
+                "not conflict with core role/safety constraints in this agent prompt."
+            )
 
         return (
-            f"{self.system_prompt.rstrip()}\n\n"
+            f"{base_prompt.rstrip()}\n\n"
             "USER GROUP MODIFICATION (APPEND-ONLY):\n"
             f"{modification}\n\n"
-            "Apply the modification above as additional guidance only when it does not "
-            "conflict with core routing/safety constraints in the base supervisor prompt."
+            f"{guidance}"
+        )
+
+    def render_supervisor_prompt(self) -> str:
+        """Build supervisor prompt with optional append-only modification block."""
+        return self._append_prompt_modification(
+            base_prompt=self.system_prompt,
+            scope="supervisor",
+        )
+
+    def render_research_prompt(self) -> str:
+        """Build research prompt with optional append-only modification block."""
+        return self._append_prompt_modification(
+            base_prompt=self.research_agent_prompt,
+            scope="research",
+        )
+
+    def render_math_prompt(self) -> str:
+        """Build math prompt with optional append-only modification block."""
+        return self._append_prompt_modification(
+            base_prompt=self.math_agent_prompt,
+            scope="math",
         )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
