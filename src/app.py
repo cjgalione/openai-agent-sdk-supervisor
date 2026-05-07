@@ -123,5 +123,5 @@ def braintrust_eval_server():
 def test():
     """Test the deployment locally."""
     print("Testing Braintrust eval server deployment...")
-    print("Deploy with: modal deploy src/app.py")
+    print("Deploy with: modal deploy src/eval_server.py")
     print("After deployment, you can connect to it from the Braintrust Playground")

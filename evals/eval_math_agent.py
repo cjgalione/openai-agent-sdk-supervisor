@@ -14,9 +14,10 @@ if str(project_root) not in sys.path:
 from agents import RunConfig, Runner  # noqa: E402
 from autoevals import LLMClassifier  # noqa: E402
 from braintrust import Eval  # noqa: E402
+from braintrust.logger import Prompt  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
-from evals.parameters import MathAgentPromptParam, MathModelParam  # noqa: E402
+from evals.parameters import MathAgentPromptParam  # noqa: E402
 from src.agents.math_agent import get_math_agent  # noqa: E402
 from src.helpers import extract_query_from_input, serialize_run_result  # noqa: E402
 
@@ -38,12 +39,40 @@ def _param_value(param: Any, default: Any) -> Any:
     return param
 
 
+def _prompt_and_model(
+    param: Any, default_prompt: str | None, default_model: str
+) -> tuple[str | None, str]:
+    if isinstance(param, Prompt):
+        prompt_text = default_prompt
+        prompt_block = param.prompt
+
+        if prompt_block is not None and getattr(prompt_block, "type", None) == "chat":
+            for message in getattr(prompt_block, "messages", []) or []:
+                if getattr(message, "role", None) != "system":
+                    continue
+                content = getattr(message, "content", None)
+                if isinstance(content, str):
+                    prompt_text = content
+                    break
+        elif prompt_block is not None and getattr(prompt_block, "type", None) == "completion":
+            content = getattr(prompt_block, "content", None)
+            if isinstance(content, str):
+                prompt_text = content
+
+        return prompt_text, param.options.get("model") or default_model
+
+    return _param_value(param, default_prompt), default_model
+
+
 async def run_math_task(input: Any, hooks: Any = None) -> dict:
     """Run a math calculation through the math agent."""
     try:
         params = hooks.parameters if hooks and hasattr(hooks, "parameters") else {}
-        math_agent_prompt = _param_value(params.get("math_agent_prompt"), None)
-        math_model = _param_value(params.get("math_model"), "gpt-4o-mini")
+        math_agent_prompt, math_model = _prompt_and_model(
+            params.get("math_agent_prompt"),
+            None,
+            _param_value(params.get("math_model"), "gpt-4o-mini"),
+        )
 
         agent = get_math_agent(system_prompt=math_agent_prompt, model=math_model)
         query = extract_query_from_input(input)
@@ -206,6 +235,5 @@ Eval(
     ],  # type: ignore
     parameters={
         "math_agent_prompt": MathAgentPromptParam,
-        "math_model": MathModelParam,
     },
 )

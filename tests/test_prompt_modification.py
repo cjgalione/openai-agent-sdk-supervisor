@@ -1,6 +1,8 @@
 import os
 
 import pytest
+from braintrust.logger import Prompt
+from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage
 
 os.environ["BRAINTRUST_DISABLE_AUTO_EVAL"] = "1"
 
@@ -53,6 +55,23 @@ def test_unwrap_parameters_extracts_single_value_models():
     assert unwrapped["prompt_modification"] == "in italiano"
 
 
+def test_unwrap_parameters_extracts_prompt_objects():
+    prompt = Prompt.from_prompt_data(
+        "supervisor_prompt",
+        PromptData(
+            prompt=PromptChatBlock(
+                messages=[PromptMessage(role="system", content="Custom supervisor prompt")]
+            ),
+            options={"model": "gpt-4.1-mini"},
+        ),
+    )
+
+    unwrapped = unwrap_parameters({"system_prompt": prompt})
+
+    assert unwrapped["system_prompt"] == "Custom supervisor prompt"
+    assert unwrapped["supervisor_model"] == "gpt-4.1-mini"
+
+
 @pytest.mark.asyncio
 async def test_run_supervisor_task_forwards_prompt_modification(monkeypatch):
     captured = {}
@@ -77,3 +96,42 @@ async def test_run_supervisor_task_forwards_prompt_modification(monkeypatch):
     assert captured["input"] == "hello"
     assert result["messages"][-1]["content"] == "Ciao dal test."
     assert hooks.metadata["final_output"] == "Ciao dal test."
+
+
+@pytest.mark.asyncio
+async def test_run_supervisor_task_forwards_prompt_object(monkeypatch):
+    captured = {}
+
+    def fake_get_supervisor(config=None, force_rebuild=False):
+        captured["config"] = config
+        return object()
+
+    async def fake_runner_run(starting_agent, input, run_config):
+        return _FakeResult(final_output="Prompt object ok.")
+
+    monkeypatch.setattr("evals.eval_supervisor.get_supervisor", fake_get_supervisor)
+    monkeypatch.setattr("evals.eval_supervisor.Runner.run", fake_runner_run)
+
+    hooks = _Hooks(
+        parameters={
+            "system_prompt": Prompt.from_prompt_data(
+                "supervisor_prompt",
+                PromptData(
+                    prompt=PromptChatBlock(
+                        messages=[
+                            PromptMessage(
+                                role="system",
+                                content="Use this custom supervisor prompt.",
+                            )
+                        ]
+                    ),
+                    options={"model": "gpt-4.1-mini"},
+                ),
+            )
+        }
+    )
+
+    await run_supervisor_task({"query": "hello"}, hooks=hooks)
+
+    assert captured["config"].system_prompt == "Use this custom supervisor prompt."
+    assert captured["config"].supervisor_model == "gpt-4.1-mini"
