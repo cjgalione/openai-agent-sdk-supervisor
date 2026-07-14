@@ -30,6 +30,31 @@ load_dotenv()
 MODEL_POOL = ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"]
 
 
+def _init_braintrust_logger():
+    api_key = os.environ.get("BRAINTRUST_API_KEY")
+    if not api_key:
+        set_trace_processors([])
+        return None
+
+    logger = init_logger(
+        project=os.environ.get("BRAINTRUST_PROJECT", DEFAULT_BRAINTRUST_PROJECT),
+        api_key=api_key,
+        org_name=os.environ.get("BRAINTRUST_ORG_NAME", "Braintrust Demos"),
+    )
+    try:
+        # init_logger resolves project metadata lazily; force it now so auth/config
+        # failures fail the scheduled job before query results are silently dropped.
+        _ = logger.project.id
+    except Exception as exc:
+        raise RuntimeError(
+            "BRAINTRUST_API_KEY is set, but Braintrust logger initialization failed. "
+            "Refresh the GitHub Actions BRAINTRUST_API_KEY secret."
+        ) from exc
+
+    set_trace_processors([BraintrustTracingProcessor(logger)])
+    return logger
+
+
 def _openai_client() -> OpenAI:
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -166,16 +191,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    logger = None
-    if os.environ.get("BRAINTRUST_API_KEY"):
-        logger = init_logger(
-            project=os.environ.get("BRAINTRUST_PROJECT", DEFAULT_BRAINTRUST_PROJECT),
-            api_key=os.environ.get("BRAINTRUST_API_KEY"),
-            org_name=os.environ.get("BRAINTRUST_ORG_NAME", "Braintrust Demos"),
-        )
-        set_trace_processors([BraintrustTracingProcessor(logger)])
-    else:
-        set_trace_processors([])
+    logger = _init_braintrust_logger()
 
     try:
         asyncio.run(main_async(args))

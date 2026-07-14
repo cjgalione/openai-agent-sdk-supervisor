@@ -2,7 +2,7 @@
 
 A multi-agent supervisor system built with the OpenAI Agents SDK that routes user tasks between:
 - `MathAgent` for arithmetic and numeric reasoning
-- `ResearchAgent` for Tavily-backed web research
+- `ResearchAgent` for Exa-first web research with Tavily/You.com fallbacks
 
 ## Architecture
 
@@ -26,7 +26,8 @@ graph TB
 
 - Python 3.11+
 - OpenAI API key
-- Tavily API key
+- Exa API key
+- Tavily or You.com API key (optional fallback)
 - Braintrust API key (optional for local chat, required for eval logging)
 
 ## Environment
@@ -35,7 +36,9 @@ Create `.env`:
 
 ```env
 OPENAI_API_KEY=<your-openai-api-key>
+EXA_API_KEY=<your-exa-api-key>
 TAVILY_API_KEY=<your-tavily-api-key>
+YDC_API_KEY=<your-you-com-api-key>
 BRAINTRUST_API_KEY=<your-braintrust-api-key>
 BRAINTRUST_PROJECT=<your-braintrust-project-name>
 BRAINTRUST_ORG_NAME=<your-braintrust-org-name>

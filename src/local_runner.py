@@ -27,7 +27,7 @@ def _set_if_undefined(var: str) -> None:
 async def _run_chat() -> None:
     load_dotenv()
     _set_if_undefined("OPENAI_API_KEY")
-    _set_if_undefined("TAVILY_API_KEY")
+    _set_if_undefined("EXA_API_KEY")
 
     console = Console()
     logger = None
