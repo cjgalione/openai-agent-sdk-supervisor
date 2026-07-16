@@ -81,12 +81,9 @@ braintrust eval evals/eval_supervisor.py
 modal setup
 ```
 2. Ensure your intended Modal profile/account is active.
-3. Set a unique app name in `.env` via `MODAL_APP_NAME` (already parameterized in `src/app.py` and `src/eval_server.py`).
+3. Set a unique app name in `.env` via `MODAL_APP_NAME`. Deployments scale to zero by
+   default; set `MODAL_MIN_CONTAINERS=1` only when a warm endpoint is explicitly needed.
 4. Deploy:
-```bash
-modal deploy src/app.py
-```
-or
 ```bash
 modal deploy src/eval_server.py
 ```
