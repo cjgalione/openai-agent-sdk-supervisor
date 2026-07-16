@@ -84,12 +84,9 @@ modal setup
 3. Set a unique app name in `.env` via `MODAL_APP_NAME` (already parameterized in `src/app.py` and `src/eval_server.py`).
 4. Deploy:
 ```bash
-modal deploy src/app.py
-```
-or
-```bash
 modal deploy src/eval_server.py
 ```
+Use `src/eval_server.py` for remote eval deployment; it includes the Braintrust parameter patch used by this project.
 
 ## Key Files
 

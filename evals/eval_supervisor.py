@@ -21,11 +21,8 @@ from pydantic import BaseModel  # noqa: E402
 from evals.braintrust_parameter_patch import apply_parameter_patch  # noqa: E402
 from evals.parameters import (  # noqa: E402
     MathAgentPromptParam,
-    MathModelParam,
     PromptModificationParam,
     ResearchAgentPromptParam,
-    ResearchModelParam,
-    SupervisorModelParam,
     SystemPromptParam,
 )
 from src.agents.deep_agent import get_supervisor  # noqa: E402
@@ -50,11 +47,46 @@ def unwrap_parameters(params: dict) -> dict:
     """Extract raw parameter values from Braintrust parameter objects."""
     import inspect
 
+    from braintrust.logger import Prompt
     from pydantic import BaseModel
 
     result: dict[str, Any] = {}
     for key, param in params.items():
         if param is None:
+            continue
+
+        if isinstance(param, Prompt):
+            prompt_block = param.prompt
+            prompt_text = None
+            if prompt_block is not None:
+                if getattr(prompt_block, "type", None) == "completion":
+                    prompt_text = getattr(prompt_block, "content", None)
+                elif getattr(prompt_block, "type", None) == "chat":
+                    for message in getattr(prompt_block, "messages", []) or []:
+                        if getattr(message, "role", None) != "system":
+                            continue
+                        content = getattr(message, "content", None)
+                        if isinstance(content, str):
+                            prompt_text = content
+                            break
+
+            if key == "system_prompt":
+                if prompt_text is not None:
+                    result["system_prompt"] = prompt_text
+                if param.options.get("model"):
+                    result["supervisor_model"] = param.options["model"]
+            elif key == "research_agent_prompt":
+                if prompt_text is not None:
+                    result["research_agent_prompt"] = prompt_text
+                if param.options.get("model"):
+                    result["research_model"] = param.options["model"]
+            elif key == "math_agent_prompt":
+                if prompt_text is not None:
+                    result["math_agent_prompt"] = prompt_text
+                if param.options.get("model"):
+                    result["math_model"] = param.options["model"]
+            else:
+                result[key] = param
             continue
 
         if inspect.isclass(param) and issubclass(param, BaseModel):
@@ -419,8 +451,5 @@ if not disable_auto_eval:
             "prompt_modification": PromptModificationParam,
             "research_agent_prompt": ResearchAgentPromptParam,
             "math_agent_prompt": MathAgentPromptParam,
-            "supervisor_model": SupervisorModelParam,
-            "research_model": ResearchModelParam,
-            "math_model": MathModelParam,
         },
     )
