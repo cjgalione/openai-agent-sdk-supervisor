@@ -11,13 +11,14 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from agents import RunConfig, Runner, set_trace_processors
+from agents import RunConfig, Runner, set_default_openai_client, set_trace_processors
 from braintrust import init_logger
 from braintrust.wrappers.openai import BraintrustTracingProcessor
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 
 DEFAULT_BRAINTRUST_PROJECT = "openai-agent-sdk-supervisor"
+DEFAULT_BRAINTRUST_GATEWAY_URL = "https://gateway.braintrust.dev"
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[1]
@@ -69,10 +70,27 @@ def _init_braintrust_logger():
 
 
 def _openai_client() -> OpenAI:
-    api_key = os.environ.get("OPENAI_API_KEY")
+    api_key = os.environ.get("BRAINTRUST_API_KEY")
     if not api_key:
-        raise RuntimeError("Missing OPENAI_API_KEY in environment")
-    return OpenAI(api_key=api_key)
+        raise RuntimeError("Missing BRAINTRUST_API_KEY in environment")
+    return OpenAI(
+        api_key=api_key,
+        base_url=os.environ.get("BRAINTRUST_GATEWAY_URL", DEFAULT_BRAINTRUST_GATEWAY_URL),
+    )
+
+
+def _configure_gateway_client() -> None:
+    """Route OpenAI Agents SDK calls through the Braintrust Demos gateway."""
+    api_key = os.environ.get("BRAINTRUST_API_KEY")
+    if not api_key:
+        return
+    set_default_openai_client(
+        AsyncOpenAI(
+            api_key=api_key,
+            base_url=os.environ.get("BRAINTRUST_GATEWAY_URL", DEFAULT_BRAINTRUST_GATEWAY_URL),
+        ),
+        use_for_tracing=False,
+    )
 
 
 def _fallback_questions(num_questions: int, rng: random.Random) -> list[str]:
@@ -104,7 +122,7 @@ def _preflight_failure_category(exc: Exception) -> str:
 def _run_preflight() -> dict[str, str]:
     missing = [
         name
-        for name in ("BRAINTRUST_API_KEY", "OPENAI_API_KEY", "EXA_API_KEY")
+        for name in ("BRAINTRUST_API_KEY", "EXA_API_KEY")
         if not os.environ.get(name)
     ]
     if missing:
@@ -331,6 +349,7 @@ def main() -> None:
     args = parser.parse_args()
 
     logger = _init_braintrust_logger()
+    _configure_gateway_client()
 
     try:
         asyncio.run(main_async(args))
